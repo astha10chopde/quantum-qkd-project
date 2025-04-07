@@ -1,0 +1,201 @@
+import numpy as np
+import cirq
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+import pandas as pd
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+from sklearn.model_selection import train_test_split
+#generating random bits and bases
+num_bits = 10
+alice_bits = np.random.randint(0, 2, num_bits)
+alice_bases = np.random.randint(0, 2, num_bits)
+bob_bases = np.random.randint(0, 2, num_bits)
+
+print("Alice's Bits:", alice_bits)
+print("Alice's Bases:", alice_bases)
+print("Bob's Bases:", bob_bases)
+# Simulating quantum handshake (basic analogy)
+print("\n Performing Quantum Handshake...")
+if np.array_equal(alice_bases, bob_bases):
+    print(" Handshake Successful - Bases Matched")
+else:
+    print(" Handshake Partial - Some Bases Mismatched")
+# TTL (Time to Live) & RTT (Round Trip Time) Simulation
+# TTL: Number of times a qubit can be transmitted before decaying (simplified)
+ttl = np.random.randint(1, 4, num_bits)
+rtt = np.random.uniform(0.01, 0.1, num_bits)  
+print("\nTTL values (Qubit Lifespan):", ttl)
+print("RTT values (in seconds):", np.round(rtt, 3))
+
+qubits = [cirq.LineQubit(i) for i in range(num_bits)]
+circuit = cirq.Circuit()
+
+for i in range(num_bits):
+    if alice_bases[i] == 1:
+        circuit.append(cirq.H(qubits[i]))
+    if alice_bits[i] == 1:
+        circuit.append(cirq.X(qubits[i]))
+
+print("Quantum circuit (pre-Eve):\n")
+print(circuit)
+
+#simulating eavesdropping
+eve_presence = np.random.choice([0, 1], num_bits, p=[0.7, 0.3])
+for i in range(num_bits):
+    if eve_presence[i]:
+        circuit.append(cirq.H(qubits[i]))
+        circuit.append(cirq.measure(qubits[i]))
+
+print("Eavesdropping Detected (1 = yes):", eve_presence)
+#bob generates bases and bits 
+circuit = cirq.Circuit()
+for i in range(num_bits):
+    if bob_bases[i] == 1:
+        circuit.append(cirq.H(qubits[i]))
+    circuit.append(cirq.measure(qubits[i], key=f"m_{i}"))
+
+# Simulate
+simulator = cirq.Simulator()
+result = simulator.run(circuit)
+
+# Extract measured bits
+bob_bits = np.array([result.measurements[f"m_{i}"][0][0] for i in range(num_bits)])
+
+print("Bob's Bases:        ", bob_bases)
+print("Bob's Measured Bits:", bob_bits)
+
+#matching the bits
+sifted_key = [bob_bits[i] for i in range(num_bits) if alice_bases[i] == bob_bases[i]]
+print(" Sifted Key (matching bases):", sifted_key)
+
+#providing a dataset 
+import pandas as pd
+import numpy as np
+
+np.random.seed(42)
+num_bits = 500
+
+# Step 1: Generate random bits and bases
+alice_bits = np.random.randint(0, 2, num_bits)
+alice_bases = np.random.randint(0, 2, num_bits)  
+bob_bases = np.random.randint(0, 2, num_bits)
+
+
+eve_presence = np.random.choice([0, 1], size=num_bits, p=[0.7, 0.3])
+noise = np.random.rand(num_bits)  
+ 
+received_bits = np.copy(alice_bits)
+for i in range(num_bits):
+    if eve_presence[i]:
+        received_bits[i] = np.random.randint(0, 2) if noise[i] > 0.2 else alice_bits[i]
+    elif alice_bases[i] != bob_bases[i]:
+        received_bits[i] = np.random.randint(0, 2)  # Wrong basis adds uncertainty
+
+#  Calculate error
+error_detected = (received_bits != alice_bits).astype(int)
+
+# Construct DataFrame
+df = pd.DataFrame({
+    'Alice_Bits': alice_bits,
+    'Alice_Bases': alice_bases,
+    'Bob_Bases': bob_bases,
+    'Eve_Present': eve_presence,
+    'Noise_Level': noise.round(2),
+    'Bob_Received_Bits': received_bits,
+    'Error_Detected': error_detected
+})
+
+df.head(10)
+import matplotlib.pyplot as plt
+
+plt.figure(figsize=(7,4))
+plt.hist(df[df['Eve_Present'] == 1]['Error_Detected'], bins=2, label='Eve Present', alpha=0.7)
+plt.hist(df[df['Eve_Present'] == 0]['Error_Detected'], bins=2, label='Eve Absent', alpha=0.7)
+plt.xticks([0, 1], ['No Error', 'Error'])
+plt.title("Error Rate with and without Eavesdropping")
+plt.xlabel("Error Detected")
+plt.ylabel("Frequency")
+plt.legend()
+plt.grid(True)
+plt.show()
+#noise vs error detected
+plt.figure(figsize=(8, 4))
+plt.scatter(df['Noise_Level'], df['Error_Detected'], alpha=0.3, c=df['Eve_Present'], cmap='coolwarm', edgecolors='k')
+plt.title('📡 Noise vs Error Detected (Color = Eve)')
+plt.xlabel('Noise Level')
+plt.ylabel('Error Detected')
+plt.grid(True)
+plt.show()
+
+#alice vs bob bit agreement heatmap
+import seaborn as sns
+
+heat_data = pd.crosstab(df['Alice_Bits'], df['Bob_Received_Bits'])
+sns.heatmap(heat_data, annot=True, cmap="YlGnBu", fmt='d')
+plt.title('Alice vs Bob: Bit Agreement Heatmap')
+plt.xlabel('Bob Received Bit')
+plt.ylabel('Alice Sent Bit')
+plt.show()
+
+#%of eve present and absent 
+labels = ['Eve Present', 'Eve Absent']
+sizes = df['Eve_Present'].value_counts().sort_index()
+colors = ['lightcoral', 'lightblue']
+
+plt.figure(figsize=(5, 5))
+plt.pie(sizes, labels=labels, colors=colors, autopct='%1.1f%%', startangle=140)
+plt.title(" Distribution of Eve's Presence")
+plt.axis('equal')
+plt.show()
+
+from IPython.display import HTML
+HTML(ani.to_jshtml())
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+
+# Features: what Bob has access to
+X = df[['Bob_Received_Bits', 'Bob_Bases', 'Noise_Level', 'Eve_Present']]
+# Labels: what we want to predict (Alice's original bits)
+y = df['Alice_Bits']
+
+# Normalize features for better training
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+# Split into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+
+# Build a simple neural network
+model = Sequential([
+    Dense(16, activation='relu', input_shape=(X.shape[1],)),
+    Dense(8, activation='relu'),
+    Dense(1, activation='sigmoid')  # Output: predict 0 or 1
+])
+
+model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+
+# Train the model
+history = model.fit(X_train, y_train, validation_split=0.2, epochs=25, batch_size=16)
+
+from sklearn.metrics import accuracy_score
+
+# Predict on test data
+y_pred = (model.predict(X_test) > 0.5).astype(int)
+accuracy = accuracy_score(y_test, y_pred)
+
+print(" AI Model Accuracy:", round(accuracy * 100, 2), "%")
+
+import matplotlib.pyplot as plt
+
+plt.plot(history.history['accuracy'], label='Train Accuracy')
+plt.plot(history.history['val_accuracy'], label='Validation Accuracy')
+plt.xlabel('Epochs')
+plt.ylabel('Accuracy')
+plt.title('📈 AI Training Performance')
+plt.legend()
+plt.grid(True)
+plt.show()
